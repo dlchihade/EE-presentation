@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Semantic Space Visualization</title>
+    <style>
+        /* Basic styling to create a clean interface */
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .visualization {
+            width: 100%;
+            height: 500px;
+            position: relative;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            background-color: white;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .metric-box {
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        
+        .metric-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        select, button {
+            padding: 5px 10px;
+            margin-right: 10px;
+        }
+        
+        /* Tooltip style */
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+        }
+        
+        /* Legend styles */
+        .legend {
+            display: flex;
+            margin-top: 10px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
+        }
+        
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Semantic Verbal Fluency Visualization</h1>
+        
+        <div class="controls">
+            <label for="participant-select">Participant: </label>
+            <select id="participant-select">
+                <option value="0">PD00020 (Lion, Tiger, Sheep...)</option>
+                <option value="1">PD00048 (Lion, Hare, Elephant...)</option>
+            </select>
+            
+            <label for="model-select">Model: </label>
+            <select id="model-select">
+                <option value="actual">Actual Path</option>
+                <option value="mvt">Marginal Value Theorem</option>
+                <option value="softmax">Softmax</option>
+            </select>
+            
+            <button id="refresh-btn">Refresh View</button>
+        </div>
+        
+        <div class="visualization" id="canvas-container">
+            <canvas id="main-canvas"></canvas>
+            <div class="tooltip" id="tooltip"></div>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #3498db;"></div>
+                <span>Actual Path</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #2ecc71;"></div>
+                <span>Exploitation</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #e74c3c;"></div>
+                <span>Exploration</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: rgba(200,200,200,0.3);"></div>
+                <span>Cluster</span>
+            </div>
+        </div>
+        
+        <div class="metrics" id="metrics-container">
+            <!-- Metrics will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        // ======== INITIALIZATION ========
+        
+        // Get DOM elements
+        const canvas = document.getElementById('main-canvas');
+        const ctx = canvas.getContext('2d');
+        const canvasContainer = document.getElementById('canvas-container');
+        const participantSelect = document.getElementById('participant-select');
+        const modelSelect = document.getElementById('model-select');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const tooltip = document.getElementById('tooltip');
+        const metricsContainer = document.getElementById('metrics-container');
+        
+        // Set canvas size to match container
+        function resizeCanvas() {
+            canvas.width = canvasContainer.clientWidth;
+            canvas.height = canvasContainer.clientHeight;
+        }
+        
+        // Call resize on load and on window resize
+        window.addEventListener('load', resizeCanvas);
+        window.addEventListener('resize', resizeCanvas);
+        
+        // ======== DATA ========
+        
+        // Participant data with verbal fluency results
+        const participantData = [
+            {
+                id: "PD00020",
+                items: ["lion", "tiger", "sheep", "dog", "cat", "camel", "monkey", "chimpanzee", "buffalo", "hyena", "elephant", "mouse", "bird"],
+                // Pre-calculated 2D positions for visualization (normally derived from word vectors)
+                positions: [
+                    [0.8, 0.2],  // lion
+                    [0.75, 0.25],  // tiger
+                    [0.3, 0.7],  // sheep
+                    [0.25, 0.6],  // dog
+                    [0.2, 0.65],  // cat
+                    [0.45, 0.45],  // camel
+                    [0.6, 0.3],  // monkey
+                    [0.65, 0.25],  // chimpanzee
+                    [0.4, 0.5],  // buffalo
+                    [0.55, 0.35],  // hyena
+                    [0.5, 0.4],  // elephant
+                    [0.15, 0.7],  // mouse
+                    [0.35, 0.6]   // bird
+                ],
+                // Cosine similarities between consecutive items
+                similarities: [0.82, 0.43, 0.51, 0.74, 0.38, 0.47, 0.86, 0.41, 0.39, 0.56, 0.33, 0.42],
+                // Semantic clusters for visualization
+                clusters: [
+                    { name: "Big cats", members: [0, 1], color: "rgba(174, 214, 241, 0.3)" },
+                    { name: "Domestic animals", members: [2, 3, 4], color: "rgba(213, 245, 227, 0.3)" },
+                    { name: "Primates", members: [6, 7], color: "rgba(250, 219, 216, 0.3)" },
+                    { name: "Large mammals", members: [5, 8, 10], color: "rgba(232, 218, 239, 0.3)" },
+                    { name: "Small animals", members: [11, 12], color: "rgba(249, 231, 159, 0.3)" }
+                ]
+            },
+            {
+                id: "PD00048",
+                items: ["lion", "hare", "elephant", "rhinoceros", "monkey", "giraffe", "cow", "elk", "fish", "horse", "tiger", "leopard", "jaguar"],
+                positions: [
+                    [0.8, 0.2],  // lion
+                    [0.2, 0.7],  // hare
+                    [0.5, 0.4],  // elephant
+                    [0.45, 0.45],  // rhinoceros
+                    [0.6, 0.3],  // monkey
+                    [0.55, 0.35],  // giraffe
+                    [0.25, 0.65],  // cow
+                    [0.3, 0.6],  // elk
+                    [0.15, 0.8],  // fish
+                    [0.35, 0.55],  // horse
+                    [0.75, 0.25],  // tiger
+                    [0.7, 0.3],  // leopard
+                    [0.65, 0.35]   // jaguar
+                ],
+                similarities: [0.41, 0.46, 0.58, 0.49, 0.52, 0.63, 0.45, 0.38, 0.47, 0.81, 0.87, 0.84],
+                clusters: [
+                    { name: "Big cats", members: [0, 10, 11, 12], color: "rgba(174, 214, 241, 0.3)" },
+                    { name: "Small mammals", members: [1], color: "rgba(213, 245, 227, 0.3)" },
+                    { name: "Large mammals", members: [2, 3, 5, 6, 7, 9], color: "rgba(232, 218, 239, 0.3)" },
+                    { name: "Primates", members: [4], color: "rgba(250, 219, 216, 0.3)" },
+                    { name: "Aquatic", members: [8], color: "rgba(249, 231, 159, 0.3)" }
+                ]
+            }
+        ];
+        
+        // ======== GLOBAL STATE ========
+        let currentParticipant = 0;  // Current participant index
+        let currentModel = 'actual';  // Current model (actual, mvt, softmax)
+        const mvtThreshold = 0.5;    // Threshold for MVT model
+        
+        // ======== EVENT LISTENERS ========
+        
+        // Handle change of participant
+        participantSelect.addEventListener('change', function() {
+            currentParticipant = parseInt(this.value);
+            drawVisualization();
+        });
+        
+        // Handle change of model
+        modelSelect.addEventListener('change', function() {
+            currentModel = this.value;
+            drawVisualization();
+        });
+        
+        // Handle manual refresh
+        refreshBtn.addEventListener('click', drawVisualization);
+        
+        // Handle tooltip on canvas
+        canvas.addEventListener('mousemove', function(event) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            
+            // Check if mouse is over any point
+            const data = participantData[currentParticipant];
+            const padding = 40;
+            const width = canvas.width - 2 * padding;
+            const height = canvas.height - 2 * padding;
+            
+            for (let i = 0; i < data.items.length; i++) {
+                const x = padding + data.positions[i][0] * width;
+                const y = padding + data.positions[i][1] * height;
+                
+                // Check if mouse is within 10px of point
+                const distance = Math.sqrt(Math.pow(mouseX - x, 2) + Math.pow(mouseY - y, 2));
+                if (distance < 10) {
+                    // Show tooltip
+                    tooltip.innerHTML = `${data.items[i]} (${i+1})`;
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = mouseX + 10 + 'px';
+                    tooltip.style.top = mouseY + 10 + 'px';
+                    return;
+                }
+            }
+            
+            // Hide tooltip if not over any point
+            tooltip.style.display = 'none';
+        });
+        
+        // Hide tooltip when mouse leaves canvas
+        canvas.addEventListener('mouseout', function() {
+            tooltip.style.display = 'none';
+        });
+        
+        // ======== DRAWING FUNCTIONS ========
+        
+        // Main visualization function
+        function drawVisualization() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const data = participantData[currentParticipant];
+            const padding = 40;
+            const width = canvas.width - 2 * padding;
+            const height = canvas.height - 2 * padding;
+            
+            // Draw clusters
+            drawClusters(data, padding, width, height);
+            
+            // Draw paths based on model
+            if (currentModel === 'actual') {
+                // Draw actual path
+                drawActualPath(data, padding, width, height);
+            } else if (currentModel === 'mvt') {
+                // Draw MVT model path
+                drawMVTPath(data, padding, width, height);
+            } else if (currentModel === 'softmax') {
+                // Draw Softmax model path
+                drawSoftmaxPath(data, padding, width, height);
+            }
+            
+            // Draw points and labels
+            drawPointsAndLabels(data, padding, width, height);
+            
+            // Update metrics
+            updateMetrics(data);
+        }
+        
+        // Draw semantic clusters
+        function drawClusters(data, padding, width, height) {
+            for (const cluster of data.clusters) {
+                if (cluster.members.length >= 2) {
+                    // Draw convex hull around cluster members
+                    ctx.beginPath();
+                    
+                    // Start with the first point
+                    const firstMember = cluster.members[0];
+                    const firstX = padding + data.positions[firstMember][0] * width;
+                    const firstY = padding + data.positions[firstMember][1] * height;
+                    ctx.moveTo(firstX, firstY);
+                    
+                    // For simplicity with just 2-3 members, draw a simple polygon
+                    for (let i = 1; i < cluster.members.length; i++) {
+                        const member = cluster.members[i];
+                        const x = padding + data.positions[member][0] * width;
+                        const y = padding + data.positions[member][1] * height;
+                        ctx.lineTo(x, y);
+                    }
+                    
+                    // Close the path
+                    ctx.closePath();
+                    
+                    // Fill with semi-transparent color
+                    ctx.fillStyle = cluster.color;
+                    ctx.fill();
+                    
+                    // Draw border with dashed line
+                    ctx.setLineDash([3, 3]);
+                    ctx.strokeStyle = '#999';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    
+                    // Reset line dash
+                    ctx.setLineDash([]);
+                    
+                    // Add cluster label
+                    if (cluster.members.length >= 2) {
+                        // Calculate center point
+                        let sumX = 0, sumY = 0;
+                        for (const member of cluster.members) {
+                            sumX += padding + data.positions[member][0] * width;
+                            sumY += padding + data.positions[member][1] * height;
+                        }
+                        
+                        const centerX = sumX / cluster.members.length;
+                        const centerY = sumY / cluster.members.length;
+                        
+                        // Draw label
+                        ctx.fillStyle = '#666';
+                        ctx.font = '12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(cluster.name, centerX, centerY);
+                    }
+                }
+            }
+        }
+        
+        // Draw the actual path taken by the participant
+        function drawActualPath(data, padding, width, height) {
+            // Draw the path connecting the points in sequence
+            ctx.beginPath();
+            
+            // Start with the first point
+            const startX = padding + data.positions[0][0] * width;
+            const startY = padding + data.positions[0][1] * height;
+            ctx.moveTo(startX, startY);
+            
+            // Connect remaining points
+            for (let i = 1; i < data.items.length; i++) {
+                const x = padding + data.positions[i][0] * width;
+                const y = padding + data.positions[i][1] * height;
+                ctx.lineTo(x, y);
+            }
+            
+            // Style and stroke the path
+            ctx.strokeStyle = '#3498db';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw phase indicators based on similarity thresholds
+            for (let i = 0; i < data.similarities.length; i++) {
+                const x1 = padding + data.positions[i][0] * width;
+                const y1 = padding + data.positions[i][1] * height;
+                const x2 = padding + data.positions[i+1][0] * width;
+                const y2 = padding + data.positions[i+1][1] * height;
+                
+                // Calculate midpoint
+                const midX = (x1 + x2) / 2;
+                const midY = (y1 + y2) / 2;
+                
+                // Draw a small circle at the midpoint colored by phase
+                ctx.beginPath();
+                ctx.arc(midX, midY, 4, 0, Math.PI * 2);
+                
+                // Color based on similarity (exploitation vs exploration)
+                if (data.similarities[i] > mvtThreshold) {
+                    ctx.fillStyle = '#2ecc71'; // Exploitation (green)
+                } else {
+                    ctx.fillStyle = '#e74c3c'; // Exploration (red)
+                }
+                
+                ctx.fill();
+            }
+        }
+        
+        // Draw MVT model path
+        function drawMVTPath(data, padding, width, height) {
+            // First, draw the actual path
+            drawActualPath(data, padding, width, height);
+            
+            // Identify and highlight phases
+            let phases = [];
+            let currentPhase = data.similarities[0] > mvtThreshold ? 'exploitation' : 'exploration';
+            let phaseStart = 0;
+            
+            for (let i = 1; i < data.similarities.length; i++) {
+                if ((currentPhase === 'exploitation' && data.similarities[i] <= mvtThreshold) || 
+                    (currentPhase === 'exploration' && data.similarities[i] > mvtThreshold)) {
+                    // Phase change
+                    phases.push({
+                        type: currentPhase,
+                        start: phaseStart,
+                        end: i
+                    });
+                    
+                    currentPhase = currentPhase === 'exploitation' ? 'exploration' : 'exploitation';
+                    phaseStart = i;
+                }
+            }
+            
+            // Add final phase
+            phases.push({
+                type: currentPhase,
+                start: phaseStart,
+                end: data.similarities.length
+            });
+            
+            // Draw phase indicators
+            for (const phase of phases) {
+                // Draw a highlight along the path segment
+                for (let i = phase.start; i < phase.end; i++) {
+                    const x1 = padding + data.positions[i][0] * width;
+                    const y1 = padding + data.positions[i][1] * height;
+                    const x2 = padding + data.positions[i+1][0] * width;
+                    const y2 = padding + data.positions[i+1][1] * height;
+                    
+                    // Draw a thicker, semi-transparent highlight
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    
+                    // Style based on phase type
+                    if (phase.type === 'exploitation') {
+                        ctx.strokeStyle = 'rgba(46, 204, 113, 0.5)'; // Semi-transparent green
+                    } else {
+                        ctx.strokeStyle = 'rgba(231, 76, 60, 0.5)'; // Semi-transparent red
+                    }
+                    
+                    ctx.lineWidth = 5;
+                    ctx.stroke();
+                }
+                
+                // Label the phase
+                const startIdx = phase.start;
+                const endIdx = Math.min(phase.end, data.positions.length - 1);
+                const startX = padding + data.positions[startIdx][0] * width;
+                const startY = padding + data.positions[startIdx][1] * height;
+                
+                // Position label near the start of the phase
+                ctx.fillStyle = phase.type === 'exploitation' ? '#27ae60' : '#c0392b';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(phase.type.charAt(0).toUpperCase() + phase.type.slice(1), 
+                             startX, startY - 15);
+            }
+        }
+        
+        // Draw Softmax model path
+        function drawSoftmaxPath(data, padding, width, height) {
+            // For simplicity, we'll draw a simulated path based on probabilistic transitions
+            // This is a simplified version - a real implementation would use the softmax algorithm
+            
+            // Draw the actual path first (partially transparent)
+            ctx.globalAlpha = 0.3;
+            drawActualPath(data, padding, width, height);
+            ctx.globalAlpha = 1.0;
+            
+            // Now draw a simulated softmax path
+            // For demonstration purposes, we'll create a somewhat random path
+            // that still follows semantic similarity
+            const positions = [];
+            
+            // Start with the first point
+            positions.push(0);
+            
+            // Generate a path using a simple probabilistic model
+            const usedPositions = new Set([0]);
+            let current = 0;
+            
+            while (positions.length < data.items.length) {
+                // Calculate "probabilities" of next items based on semantic similarity
+                const probabilities = [];
+                
+                for (let i = 0; i < data.positions.length; i++) {
+                    if (!usedPositions.has(i)) {
+                        // Simple distance-based probability (closer = more likely)
+                        const dx = data.positions[current][0] - data.positions[i][0];
+                        const dy = data.positions[current][1] - data.positions[i][1];
+                        const distance = Math.sqrt(dx*dx + dy*dy);
+                        
+                        // Convert distance to probability (closer = higher probability)
+                        // The 0.2 is like a "temperature" parameter in the softmax function
+                        const probability = Math.exp(-distance / 0.2);
+                        
+                        probabilities.push({ index: i, probability });
+                    }
+                }
+                
+                // If no probabilities, break
+                if (probabilities.length === 0) break;
+                
+                // Normalize probabilities
+                const sum = probabilities.reduce((sum, p) => sum + p.probability, 0);
+                for (let p of probabilities) {
+                    p.probability /= sum;
+                }
+                
+                // Choose next position weighted by probability
+                const r = Math.random();
+                let cumulativeProbability = 0;
+                let chosenIndex = -1;
+                
+                for (const p of probabilities) {
+                    cumulativeProbability += p.probability;
+                    if (r <= cumulativeProbability) {
+                        chosenIndex = p.index;
+                        break;
+                    }
+                }
+                
+                // If nothing chosen (shouldn't happen), take the highest probability
+                if (chosenIndex === -1) {
+                    chosenIndex = probabilities.reduce((max, p) => 
+                        p.probability > probabilities[max].probability ? probabilities.indexOf(p) : max, 0);
+                }
+                
+                // Add to path
+                positions.push(chosenIndex);
+                usedPositions.add(chosenIndex);
+                current = chosenIndex;
+            }
+            
+            // Draw the path
+            ctx.beginPath();
+            
+            // Start point
+            const startX = padding + data.positions[positions[0]][0] * width;
+            const startY = padding + data.positions[positions[0]][1] * height;
+            ctx.moveTo(startX, startY);
+            
+            // Connect remaining points
+            for (let i = 1; i < positions.length; i++) {
+                const x = padding + data.positions[positions[i]][0] * width;
+                const y = padding + data.positions[positions[i]][1] * height;
+                ctx.lineTo(x, y);
+            }
+            
+            // Style and stroke
+            ctx.strokeStyle = '#e74c3c';
+            ctx.setLineDash([5, 3]);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Reset line dash
+            ctx.setLineDash([]);
+            
+            // Mark each chosen point
+            for (let i = 0; i < positions.length; i++) {
+                const x = padding + data.positions[positions[i]][0] * width;
+                const y = padding + data.positions[positions[i]][1] * height;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#e74c3c';
+                ctx.fill();
+                
+                // Add sequence number
+                ctx.fillStyle = '#000';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(i+1, x, y+15);
+            }
+        }
+        
+        // Draw points and labels
+        function drawPointsAndLabels(data, padding, width, height) {
+            for (let i = 0; i < data.items.length; i++) {
+                const x = padding + data.positions[i][0] * width;
+                const y = padding + data.positions[i][1] * height;
+                
+                // Draw circle for the point
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                
+                // Color based on position in sequence
+                const hue = (i / data.items.length) * 360;
+                ctx.fillStyle = `hsl(${hue}, 70%, 60%)`;
+                ctx.fill();
+                
+                // Draw outline
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                // Draw word label
+                ctx.fillStyle = '#333';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(data.items[i], x, y - 12);
+                
+                // Draw sequence number in a small circle
+                const seqX = x + 15;
+                const seqY = y;
+                
+                ctx.beginPath();
+                ctx.arc(seqX, seqY, 8, 0, Math.PI * 2);
+                ctx.fillStyle = 'white';
+                ctx.fill();
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+                
+                ctx.fillStyle = '#333';
+                ctx.font = '9px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(i+1, seqX, seqY+3);
+            }
+        }
+        
+        // Update metrics display
+        function updateMetrics(data) {
+            // Clear current metrics
+            metricsContainer.innerHTML = '';
+            
+            // Calculate exploitation and exploration percentages
+            let exploitation = 0;
+            let exploration = 0;
+            
+            for (const similarity of data.similarities) {
+                if (similarity > mvtThreshold) {
+                    exploitation++;
+                } else {
+                    exploration++;
+                }
+            }
+            
+            const total = exploitation + exploration;
+            const exploitationPercent = (exploitation / total) * 100;
+            const explorationPercent = (exploration / total) * 100;
+            
+            // Calculate average similarity
+            const avgSimilarity = data.similarities.reduce((sum, sim) => sum + sim, 0) / data.similarities.length;
+            
+            // Calculate phases
+            let phases = [];
+            let currentPhase = data.similarities[0] > mvtThreshold ? 'exploitation' : 'exploration';
+            let phaseStart = 0;
+            
+            for (let i = 1; i < data.similarities.length; i++) {
+                if ((currentPhase === 'exploitation' && data.similarities[i] <= mvtThreshold) || 
+                    (currentPhase === 'exploration' && data.similarities[i] > mvtThreshold)) {
+                    // Phase change
+                    phases.push({
+                        type: currentPhase,
+                        start: phaseStart,
+                        end: i
+                    });
+                    
+                    currentPhase = currentPhase === 'exploitation' ? 'exploration' : 'exploitation';
+                    phaseStart = i;
+                }
+            }
+            
+            // Add final phase
+            phases.push({
+                type: currentPhase,
+                start: phaseStart,
+                end: data.similarities.length
+            });
+            
+            // Calculate average phase size
+            const phaseSizes = phases.map(p => p.end - p.start);
+            const avgPhaseSize = phaseSizes.reduce((sum, size) => sum + size, 0) / phases.length;
+            
+            // Create metrics display
+            addMetric('Exploitation', `${exploitationPercent.toFixed(1)}%`);
+            addMetric('Exploration', `${explorationPercent.toFixed(1)}%`);
+            addMetric('Avg. Similarity', avgSimilarity.toFixed(2));
+            addMetric('Number of Phases', phases.length);
+            addMetric('Avg. Phase Size', avgPhaseSize.toFixed(1));
+            addMetric('E/E Tradeoff', (avgPhaseSize / (phases.length - 1 || 1)).toFixed(2));
+        }
+        
+        // Add a metric to the display
+        function addMetric(name, value) {
+            const metricBox = document.createElement('div');
+            metricBox.className = 'metric-box';
+            
+            const metricName = document.createElement('div');
+            metricName.className = 'metric-name';
+            metricName.textContent = name;
+            
+            const metricValue = document.createElement('div');
+            metricValue.className = 'metric-value';
+            metricValue.textContent = value;
+            
+            metricBox.appendChild(metricName);
+            metricBox.appendChild(metricValue);
+            
+            metricsContainer.appendChild(metricBox);
+        }
+        
+        // Initialize visualization on page load
+        window.onload = function() {
+            resizeCanvas();
+            drawVisualization();
+        };
+    </script>
+</body>
+</html>

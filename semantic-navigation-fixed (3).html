@@ -1,0 +1,2028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Space Navigation: MVT vs Softmax</title>
+    <!-- Include D3.js for visualization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <!-- Include math.js for calculations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            color: #333;
+            font-size: 12px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+        }
+        
+        h1 {
+            font-size: 18px;
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        h2 {
+            font-size: 16px;
+            color: #2c3e50;
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+        
+        h3 {
+            font-size: 14px;
+            color: #2c3e50;
+            margin-top: 10px;
+            margin-bottom: 8px;
+        }
+        
+        h4 {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+            margin-bottom: 5px;
+        }
+        
+        .visualization-container {
+            position: relative;
+            height: 400px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        
+        .controls-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .model-controls, .animation-controls {
+            flex: 1;
+            padding: 10px;
+            background-color: #f1f1f1;
+            border-radius: 4px;
+            margin-right: 5px;
+            font-size: 11px;
+        }
+        
+        .animation-controls {
+            margin-left: 5px;
+            margin-right: 0;
+        }
+        
+        .metrics-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .metric-card {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        
+        .metric-card h4 {
+            margin-top: 0;
+            margin-bottom: 4px;
+            font-size: 11px;
+            color: #666;
+        }
+        
+        .metric-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        
+        .tab-button {
+            padding: 6px 12px;
+            border: none;
+            background-color: #f1f1f1;
+            cursor: pointer;
+            border-radius: 3px 3px 0 0;
+            margin-right: 3px;
+            font-size: 11px;
+        }
+        
+        .tab-button.active {
+            background-color: #e0e0e0;
+            font-weight: bold;
+        }
+        
+        .slider-container {
+            margin: 10px 0;
+        }
+        
+        .slider-container label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 11px;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 5px;
+        }
+        
+        .model-tabs {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        
+        .chart-container {
+            margin-top: 15px;
+            height: 180px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        
+        /* Navigation visualization styles */
+        .word-point {
+            stroke: #fff;
+            stroke-width: 1px;
+        }
+        
+        .word-point:hover {
+            stroke: #000;
+        }
+        
+        .semantic-cluster {
+            stroke: #777;
+            stroke-width: 0.5px;
+            stroke-dasharray: 3, 2;
+        }
+        
+        .actual-path {
+            stroke: #3498db;
+            stroke-width: 2px;
+            fill: none;
+        }
+        
+        .mvt-path {
+            stroke: #2ecc71;
+            stroke-width: 1.5px;
+            fill: none;
+            stroke-dasharray: 3, 2;
+        }
+        
+        .softmax-path {
+            stroke: #e74c3c;
+            stroke-width: 1.5px;
+            fill: none;
+            stroke-dasharray: 2, 1;
+        }
+        
+        .current-position {
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+        
+        .legend {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 6px;
+            border-radius: 3px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            font-size: 10px;
+        }
+        
+        .legend-item {
+            margin: 3px 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .legend-color {
+            width: 10px;
+            height: 10px;
+            display: inline-block;
+            margin-right: 4px;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            pointer-events: none;
+            z-index: 10;
+            display: none;
+        }
+        
+        /* Compare view styles */
+        .decision-table {
+            width: 100%;
+            margin-top: 15px;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        
+        .decision-table th, .decision-table td {
+            padding: 6px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        
+        .decision-table th {
+            background-color: #f2f2f2;
+            font-size: 11px;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+        }
+        
+        /* Timeline slider */
+        .timeline-container {
+            margin-top: 8px;
+            position: relative;
+        }
+        
+        .timeline-slider {
+            width: 100%;
+            height: 5px;
+        }
+        
+        .play-button {
+            margin-top: 8px;
+            padding: 4px 10px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        
+        .play-button:hover {
+            background-color: #2980b9;
+        }
+        
+        select {
+            font-size: 11px;
+            padding: 3px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        
+        /* Word label and sequence styling */
+        .word-label {
+            font-size: 8px;
+            pointer-events: none;
+        }
+        
+        .sequence-text {
+            font-size: 7px;
+            pointer-events: none;
+        }
+        
+        .sequence-number {
+            pointer-events: none;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .controls-container {
+                flex-direction: column;
+            }
+            
+            .model-controls,
+            .animation-controls {
+                margin: 0 0 10px 0;
+            }
+        }
+        
+        /* Error message styling */
+        .error-message {
+            color: #e74c3c;
+            font-size: 11px;
+            margin: 5px 0;
+        }
+        
+        /* Debug console */
+        .debug-console {
+            display: none;
+            border: 1px solid #ddd;
+            padding: 5px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+            font-family: monospace;
+            font-size: 10px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Semantic Space Navigation: MVT vs Softmax</h1>
+        
+        <div class="tabs">
+            <button class="tab-button active" id="semantic-space-tab">Semantic Space</button>
+            <button class="tab-button" id="compare-tab">Compare Models</button>
+            <button class="tab-button" id="metrics-tab">Detailed Metrics</button>
+        </div>
+        
+        <div class="visualization-container" id="semantic-space-view">
+            <!-- Semantic space visualization will be inserted here -->
+            <div class="loading">Loading semantic space visualization...</div>
+        </div>
+        
+        <div class="visualization-container" id="compare-view" style="display: none;">
+            <!-- Compare view will be inserted here -->
+            <div class="loading">Loading comparison view...</div>
+        </div>
+        
+        <div class="visualization-container" id="metrics-view" style="display: none;">
+            <!-- Metrics view will be inserted here -->
+            <div class="loading">Loading metrics view...</div>
+        </div>
+        
+        <div class="controls-container">
+            <div class="model-controls">
+                <h3>Model Parameters</h3>
+                
+                <div class="model-tabs">
+                    <button class="tab-button active" id="mvt-tab">MVT Model</button>
+                    <button class="tab-button" id="softmax-tab">Softmax Model</button>
+                </div>
+                
+                <div id="mvt-controls">
+                    <div class="slider-container">
+                        <label for="mvt-threshold">Patch-leaving Threshold: <span id="mvt-threshold-value">0.50</span></label>
+                        <input type="range" id="mvt-threshold" min="0.1" max="0.9" step="0.05" value="0.5">
+                    </div>
+                    
+                    <div class="slider-container">
+                        <label for="mvt-travel-cost">Travel Cost Between Patches: <span id="mvt-travel-cost-value">0.30</span></label>
+                        <input type="range" id="mvt-travel-cost" min="0.1" max="1.0" step="0.05" value="0.3">
+                    </div>
+                </div>
+                
+                <div id="softmax-controls" style="display: none;">
+                    <div class="slider-container">
+                        <label for="softmax-temperature">Temperature: <span id="softmax-temperature-value">0.50</span></label>
+                        <input type="range" id="softmax-temperature" min="0.1" max="2.0" step="0.1" value="0.5">
+                    </div>
+                    
+                    <div class="slider-container">
+                        <label for="softmax-decay">Activation Decay: <span id="softmax-decay-value">0.20</span></label>
+                        <input type="range" id="softmax-decay" min="0.0" max="0.5" step="0.05" value="0.2">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="animation-controls">
+                <h3>Animation Controls</h3>
+                
+                <div>
+                    <label for="participant-select">Select Participant: </label>
+                    <select id="participant-select">
+                        <option value="PD00020">PD00020</option>
+                        <option value="PD00048">PD00048</option>
+                        <option value="PD00119">PD00119</option>
+                        <option value="PD00146">PD00146</option>
+                        <option value="PD00215">PD00215</option>
+                    </select>
+                </div>
+                
+                <div class="timeline-container">
+                    <label for="timeline-slider">Navigation Progress: <span id="current-step">1</span> / <span id="total-steps">20</span></label>
+                    <input type="range" id="timeline-slider" class="timeline-slider" min="0" max="19" value="0">
+                </div>
+                
+                <button id="play-button" class="play-button">Play</button>
+                
+                <div class="animation-speed">
+                    <label for="speed-slider">Animation Speed: </label>
+                    <input type="range" id="speed-slider" min="0.5" max="3" step="0.5" value="1">
+                    <span id="speed-value">1x</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="metrics-panel" id="current-metrics">
+            <!-- Current metrics will be displayed here -->
+        </div>
+        
+        <div class="debug-console" id="debug-console">
+            <!-- Debug console -->
+        </div>
+    </div>
+    
+    <div class="tooltip" id="tooltip"></div>
+    
+    <script>
+        // Debug console function
+        function debugLog(message) {
+            const console = document.getElementById('debug-console');
+            const logEntry = document.createElement('div');
+            logEntry.textContent = message;
+            console.appendChild(logEntry);
+            
+            // Scroll to bottom
+            console.scrollTop = console.scrollHeight;
+        }
+        
+        // Error handling
+        function handleError(message, error) {
+            debugLog(`ERROR: ${message} - ${error.message}`);
+            console.error(message, error);
+            
+            // Display error to user if needed
+            // const errorDiv = document.createElement('div');
+            // errorDiv.className = 'error-message';
+            // errorDiv.textContent = message;
+            // document.getElementById('current-metrics').appendChild(errorDiv);
+        }
+        
+        // Sample participant data (based on the verbal fluency analysis)
+        const participantData = [
+            {
+                id: "PD00020",
+                items: ["lion", "tiger", "sheep", "dog", "cat", "camel", "monkey", "chimpanzee", "buffalo", "hyena", "dog", "cat", "elephant", "hyena", "dog", "cat", "mouse", "bird", "camel", "dragon"],
+                similarities: [0.82, 0.43, 0.51, 0.74, 0.38, 0.47, 0.86, 0.41, 0.39, 0.56, 0.78, 0.42, 0.37, 0.72, 0.76, 0.33, 0.42, 0.36, 0.32],
+                // Pre-computed word vectors for visualization purposes
+                vectors: [
+                    [0.42, 0.65, 0.18, 0.23, 0.11],  // lion
+                    [0.38, 0.61, 0.20, 0.25, 0.15],  // tiger
+                    [0.21, 0.31, 0.45, 0.12, 0.33],  // sheep
+                    [0.18, 0.25, 0.52, 0.35, 0.28],  // dog
+                    [0.15, 0.22, 0.48, 0.32, 0.30],  // cat
+                    [0.28, 0.42, 0.35, 0.18, 0.22],  // camel
+                    [0.35, 0.48, 0.22, 0.31, 0.15],  // monkey
+                    [0.32, 0.52, 0.18, 0.35, 0.12],  // chimpanzee
+                    [0.25, 0.38, 0.42, 0.15, 0.28],  // buffalo
+                    [0.31, 0.45, 0.28, 0.22, 0.18],  // hyena
+                    [0.18, 0.25, 0.52, 0.35, 0.28],  // dog (repeated)
+                    [0.15, 0.22, 0.48, 0.32, 0.30],  // cat (repeated)
+                    [0.45, 0.52, 0.15, 0.22, 0.18],  // elephant
+                    [0.31, 0.45, 0.28, 0.22, 0.18],  // hyena (repeated)
+                    [0.18, 0.25, 0.52, 0.35, 0.28],  // dog (repeated)
+                    [0.15, 0.22, 0.48, 0.32, 0.30],  // cat (repeated)
+                    [0.12, 0.18, 0.35, 0.25, 0.42],  // mouse
+                    [0.22, 0.32, 0.25, 0.18, 0.38],  // bird
+                    [0.28, 0.42, 0.35, 0.18, 0.22],  // camel (repeated)
+                    [0.52, 0.65, 0.12, 0.15, 0.08]   // dragon
+                ],
+                clusters: [
+                    // Predefined clusters for visualization
+                    { name: "Big cats", members: ["lion", "tiger"], color: "#AED6F1" },
+                    { name: "Domestic animals", members: ["sheep", "dog", "cat"], color: "#D5F5E3" },
+                    { name: "Primates", members: ["monkey", "chimpanzee"], color: "#FADBD8" },
+                    { name: "Large mammals", members: ["buffalo", "elephant", "camel"], color: "#E8DAEF" },
+                    { name: "Predators", members: ["hyena"], color: "#FCF3CF" },
+                    { name: "Small animals", members: ["mouse", "bird"], color: "#F9E79F" },
+                    { name: "Mythical", members: ["dragon"], color: "#F5CBA7" }
+                ]
+            },
+            // Add more participants with similar data structure
+            {
+                id: "PD00048",
+                items: ["lion", "hare", "elephant", "rhinoceros", "monkey", "giraffe", "cow", "elk", "fish", "horse", "tiger", "leopard", "jaguar"],
+                similarities: [0.41, 0.46, 0.58, 0.49, 0.52, 0.63, 0.45, 0.38, 0.47, 0.81, 0.87, 0.84],
+                // Pre-computed vectors would be here
+                vectors: [
+                    [0.42, 0.65, 0.18, 0.23, 0.11],  // lion
+                    [0.22, 0.30, 0.48, 0.25, 0.35],  // hare
+                    [0.45, 0.52, 0.15, 0.22, 0.18],  // elephant
+                    [0.42, 0.48, 0.18, 0.25, 0.20],  // rhinoceros
+                    [0.35, 0.48, 0.22, 0.31, 0.15],  // monkey
+                    [0.38, 0.45, 0.25, 0.18, 0.22],  // giraffe
+                    [0.25, 0.32, 0.48, 0.18, 0.35],  // cow
+                    [0.28, 0.35, 0.42, 0.15, 0.32],  // elk
+                    [0.15, 0.18, 0.25, 0.42, 0.52],  // fish
+                    [0.32, 0.38, 0.45, 0.22, 0.28],  // horse
+                    [0.38, 0.61, 0.20, 0.25, 0.15],  // tiger
+                    [0.35, 0.58, 0.22, 0.28, 0.18],  // leopard
+                    [0.32, 0.55, 0.25, 0.30, 0.20]   // jaguar
+                ],
+                clusters: [
+                    { name: "Big cats", members: ["lion", "tiger", "leopard", "jaguar"], color: "#AED6F1" },
+                    { name: "Small mammals", members: ["hare"], color: "#D5F5E3" },
+                    { name: "Large mammals", members: ["elephant", "rhinoceros", "giraffe", "cow", "elk", "horse"], color: "#E8DAEF" },
+                    { name: "Primates", members: ["monkey"], color: "#FADBD8" },
+                    { name: "Aquatic", members: ["fish"], color: "#F9E79F" }
+                ]
+            },
+            {
+                id: "PD00119",
+                items: ["lion", "tiger", "duck", "goose", "deer", "horse", "zebra", "elephant", "bird", "giraffe", "hippo", "crocodile", "elephant", "sheep", "goat", "ewe", "duck"],
+                similarities: [0.79, 0.36, 0.82, 0.43, 0.55, 0.67, 0.48, 0.30, 0.46, 0.52, 0.39, 0.48, 0.40, 0.78, 0.85, 0.40],
+                vectors: [
+                    [0.42, 0.65, 0.18, 0.23, 0.11],  // lion
+                    [0.38, 0.61, 0.20, 0.25, 0.15],  // tiger
+                    [0.22, 0.25, 0.30, 0.45, 0.38],  // duck
+                    [0.24, 0.28, 0.32, 0.42, 0.35],  // goose
+                    [0.30, 0.35, 0.40, 0.25, 0.30],  // deer
+                    [0.32, 0.38, 0.45, 0.22, 0.28],  // horse
+                    [0.34, 0.40, 0.38, 0.25, 0.22],  // zebra
+                    [0.45, 0.52, 0.15, 0.22, 0.18],  // elephant
+                    [0.22, 0.32, 0.25, 0.18, 0.38],  // bird
+                    [0.38, 0.45, 0.25, 0.18, 0.22],  // giraffe
+                    [0.40, 0.48, 0.22, 0.25, 0.15],  // hippo
+                    [0.30, 0.35, 0.18, 0.42, 0.25],  // crocodile
+                    [0.45, 0.52, 0.15, 0.22, 0.18],  // elephant (repeated)
+                    [0.21, 0.31, 0.45, 0.12, 0.33],  // sheep
+                    [0.22, 0.32, 0.42, 0.15, 0.32],  // goat
+                    [0.21, 0.31, 0.44, 0.13, 0.34],  // ewe
+                    [0.22, 0.25, 0.30, 0.45, 0.38]   // duck (repeated)
+                ],
+                clusters: [
+                    { name: "Big cats", members: ["lion", "tiger"], color: "#AED6F1" },
+                    { name: "Birds", members: ["duck", "goose", "bird"], color: "#FADBD8" },
+                    { name: "Ungulates", members: ["deer", "horse", "zebra", "sheep", "goat", "ewe"], color: "#D5F5E3" },
+                    { name: "Large mammals", members: ["elephant", "giraffe", "hippo"], color: "#E8DAEF" },
+                    { name: "Reptiles", members: ["crocodile"], color: "#F5CBA7" }
+                ]
+            },
+            {
+                id: "PD00146",
+                items: ["dog", "pig", "chicken", "partridge", "swallow", "squirrel", "rabbit", "horse", "hare", "calf", "bull", "cow", "lion", "tiger", "monkey", "giraffe", "elephant", "snake", "frog", "shark", "whale", "dolphin"],
+                similarities: [0.38, 0.72, 0.74, 0.50, 0.42, 0.71, 0.44, 0.69, 0.38, 0.82, 0.89, 0.37, 0.79, 0.41, 0.53, 0.56, 0.39, 0.65, 0.37, 0.68, 0.81],
+                vectors: [
+                    [0.18, 0.25, 0.52, 0.35, 0.28],  // dog
+                    [0.25, 0.30, 0.42, 0.30, 0.25],  // pig
+                    [0.20, 0.25, 0.35, 0.42, 0.30],  // chicken
+                    [0.21, 0.26, 0.34, 0.44, 0.31],  // partridge
+                    [0.18, 0.22, 0.28, 0.50, 0.35],  // swallow
+                    [0.15, 0.25, 0.45, 0.28, 0.35],  // squirrel
+                    [0.22, 0.28, 0.45, 0.25, 0.32],  // rabbit
+                    [0.32, 0.38, 0.45, 0.22, 0.28],  // horse
+                    [0.22, 0.30, 0.48, 0.25, 0.35],  // hare
+                    [0.30, 0.35, 0.42, 0.20, 0.25],  // calf
+                    [0.35, 0.40, 0.38, 0.18, 0.22],  // bull
+                    [0.32, 0.36, 0.40, 0.20, 0.25],  // cow
+                    [0.42, 0.65, 0.18, 0.23, 0.11],  // lion
+                    [0.38, 0.61, 0.20, 0.25, 0.15],  // tiger
+                    [0.35, 0.48, 0.22, 0.31, 0.15],  // monkey
+                    [0.38, 0.45, 0.25, 0.18, 0.22],  // giraffe
+                    [0.45, 0.52, 0.15, 0.22, 0.18],  // elephant
+                    [0.25, 0.28, 0.18, 0.45, 0.32],  // snake
+                    [0.22, 0.25, 0.18, 0.48, 0.35],  // frog
+                    [0.18, 0.22, 0.15, 0.52, 0.38],  // shark
+                    [0.20, 0.25, 0.18, 0.50, 0.35],  // whale
+                    [0.22, 0.28, 0.20, 0.48, 0.32]   // dolphin
+                ],
+                clusters: [
+                    { name: "Domestic animals", members: ["dog", "pig", "chicken", "partridge", "horse", "calf", "bull", "cow"], color: "#D5F5E3" },
+                    { name: "Birds", members: ["chicken", "partridge", "swallow"], color: "#FADBD8" },
+                    { name: "Small mammals", members: ["squirrel", "rabbit", "hare"], color: "#FCF3CF" },
+                    { name: "Big cats", members: ["lion", "tiger"], color: "#AED6F1" },
+                    { name: "Primates", members: ["monkey"], color: "#FADBD8" },
+                    { name: "Large mammals", members: ["giraffe", "elephant"], color: "#E8DAEF" },
+                    { name: "Reptiles & Amphibians", members: ["snake", "frog"], color: "#F5CBA7" },
+                    { name: "Marine animals", members: ["shark", "whale", "dolphin"], color: "#A3E4D7" }
+                ]
+            },
+            {
+                id: "PD00215",
+                items: ["donkey", "horse", "cow", "ox", "elephant", "llama", "cat", "dog", "mouse", "tiger", "lion", "leopard", "cheetah", "hyena", "bear", "goat", "partridge", "hare", "manatee", "turtle", "iguana", "frog", "toad"],
+                similarities: [0.77, 0.69, 0.76, 0.45, 0.51, 0.37, 0.70, 0.39, 0.36, 0.82, 0.85, 0.89, 0.66, 0.43, 0.40, 0.50, 0.39, 0.33, 0.40, 0.56, 0.61, 0.80],
+                vectors: [
+                    [0.28, 0.35, 0.42, 0.22, 0.25],  // donkey
+                    [0.32, 0.38, 0.45, 0.22, 0.28],  // horse
+                    [0.32, 0.36, 0.40, 0.20, 0.25],  // cow
+                    [0.34, 0.38, 0.42, 0.18, 0.22],  // ox
+                    [0.45, 0.52, 0.15, 0.22, 0.18],  // elephant
+                    [0.30, 0.42, 0.38, 0.20, 0.25],  // llama
+                    [0.15, 0.22, 0.48, 0.32, 0.30],  // cat
+                    [0.18, 0.25, 0.52, 0.35, 0.28],  // dog
+                    [0.12, 0.18, 0.35, 0.25, 0.42],  // mouse
+                    [0.38, 0.61, 0.20, 0.25, 0.15],  // tiger
+                    [0.42, 0.65, 0.18, 0.23, 0.11],  // lion
+                    [0.35, 0.58, 0.22, 0.28, 0.18],  // leopard
+                    [0.36, 0.60, 0.21, 0.26, 0.16],  // cheetah
+                    [0.31, 0.45, 0.28, 0.22, 0.18],  // hyena
+                    [0.35, 0.40, 0.30, 0.25, 0.20],  // bear
+                    [0.22, 0.32, 0.42, 0.15, 0.32],  // goat
+                    [0.21, 0.26, 0.34, 0.44, 0.31],  // partridge
+                    [0.22, 0.30, 0.48, 0.25, 0.35],  // hare
+                    [0.25, 0.30, 0.25, 0.42, 0.35],  // manatee
+                    [0.20, 0.25, 0.22, 0.48, 0.32],  // turtle
+                    [0.22, 0.26, 0.20, 0.45, 0.35],  // iguana
+                    [0.22, 0.25, 0.18, 0.48, 0.35],  // frog
+                    [0.21, 0.24, 0.19, 0.49, 0.36]   // toad
+                ],
+                clusters: [
+                    { name: "Equids", members: ["donkey", "horse"], color: "#D5F5E3" },
+                    { name: "Bovids", members: ["cow", "ox"], color: "#FADBD8" },
+                    { name: "Large mammals", members: ["elephant", "llama"], color: "#E8DAEF" },
+                    { name: "Domestic animals", members: ["cat", "dog"], color: "#D5F5E3" },
+                    { name: "Small mammals", members: ["mouse", "hare"], color: "#FCF3CF" },
+                    { name: "Big cats", members: ["tiger", "lion", "leopard", "cheetah"], color: "#AED6F1" },
+                    { name: "Predators", members: ["hyena", "bear"], color: "#F9E79F" },
+                    { name: "Birds", members: ["partridge"], color: "#FADBD8" },
+                    { name: "Aquatic", members: ["manatee"], color: "#A3E4D7" },
+                    { name: "Reptiles & Amphibians", members: ["turtle", "iguana", "frog", "toad"], color: "#F5CBA7" }
+                ]
+            }
+        ];
+
+        // DOM element references
+        const semanticSpaceView = document.getElementById('semantic-space-view');
+        const compareView = document.getElementById('compare-view');
+        const metricsView = document.getElementById('metrics-view');
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const mvtControls = document.getElementById('mvt-controls');
+        const softmaxControls = document.getElementById('softmax-controls');
+        const modelTabs = document.querySelectorAll('.model-tabs .tab-button');
+        const playButton = document.getElementById('play-button');
+        const timelineSlider = document.getElementById('timeline-slider');
+        const currentStepDisplay = document.getElementById('current-step');
+        const totalStepsDisplay = document.getElementById('total-steps');
+        const participantSelect = document.getElementById('participant-select');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValue = document.getElementById('speed-value');
+        const tooltip = document.getElementById('tooltip');
+        const currentMetricsPanel = document.getElementById('current-metrics');
+        const debugConsole = document.getElementById('debug-console');
+        
+        // MVT control references
+        const mvtThresholdSlider = document.getElementById('mvt-threshold');
+        const mvtThresholdValue = document.getElementById('mvt-threshold-value');
+        const mvtTravelCostSlider = document.getElementById('mvt-travel-cost');
+        const mvtTravelCostValue = document.getElementById('mvt-travel-cost-value');
+        
+        // Softmax control references
+        const softmaxTemperatureSlider = document.getElementById('softmax-temperature');
+        const softmaxTemperatureValue = document.getElementById('softmax-temperature-value');
+        const softmaxDecaySlider = document.getElementById('softmax-decay');
+        const softmaxDecayValue = document.getElementById('softmax-decay-value');
+        
+        // Global state variables
+        let currentParticipant = participantData[0];
+        let currentModelType = 'mvt'; // 'mvt' or 'softmax'
+        let mvtThreshold = 0.5;
+        let mvtTravelCost = 0.3;
+        let softmaxTemperature = 0.5;
+        let softmaxDecay = 0.2;
+        let currentStep = 0;
+        let isPlaying = false;
+        let animationInterval;
+        let animationSpeed = 1;
+        
+        // Initialize semantic space visualization
+        function initializeVisualization() {
+            try {
+                // Update participant data displays
+                totalStepsDisplay.textContent = currentParticipant.items.length;
+                currentStepDisplay.textContent = currentStep + 1;
+                timelineSlider.max = currentParticipant.items.length - 1;
+                timelineSlider.value = currentStep;
+                
+                // Create semantic space visualization
+                createSemanticSpaceMap();
+                
+                // Create comparison visualization
+                createComparisonView();
+                
+                // Create metrics visualization
+                createMetricsView();
+                
+                // Update metrics display
+                updateMetricsDisplay();
+                
+                debugLog(`Visualization initialized for participant ${currentParticipant.id}`);
+            } catch (error) {
+                handleError("Error initializing visualization", error);
+            }
+        }
+        
+        // Function to create semantic space map
+        function createSemanticSpaceMap() {
+            try {
+                // Clear previous visualization
+                semanticSpaceView.innerHTML = '';
+                
+                const width = semanticSpaceView.clientWidth;
+                const height = semanticSpaceView.clientHeight;
+                
+                // Create SVG container
+                const svg = d3.select(semanticSpaceView)
+                    .append('svg')
+                    .attr('width', width)
+                    .attr('height', height);
+                
+                // Create a 2D projection from our simplified vectors
+                const reducedVectors = currentParticipant.vectors.map(vector => {
+                    return [vector[0] * width * 0.8, vector[1] * height * 0.8];
+                });
+                
+                // Draw semantic clusters
+                currentParticipant.clusters.forEach(cluster => {
+                    // Find indices of words in this cluster
+                    const memberIndices = cluster.members.map(word => 
+                        currentParticipant.items.findIndex(item => item.toLowerCase() === word.toLowerCase())
+                    ).filter(index => index !== -1);
+                    
+                    // Get coordinates for cluster members
+                    const clusterPoints = memberIndices.map(index => 
+                        reducedVectors[index]
+                    );
+                    
+                    // Only draw clusters with at least 3 points
+                    if (clusterPoints.length >= 3) {
+                        try {
+                            // Calculate convex hull for the cluster
+                            const hullPoints = d3.polygonHull(clusterPoints);
+                            
+                            // Draw cluster boundary
+                            if (hullPoints) {
+                                svg.append('path')
+                                    .datum(hullPoints)
+                                    .attr('d', d => 'M' + d.join('L') + 'Z')
+                                    .attr('class', 'semantic-cluster')
+                                    .attr('fill', cluster.color)
+                                    .attr('opacity', 0.2);
+                                
+                                // Add cluster label
+                                const centroid = calculateCentroid(hullPoints);
+                                svg.append('text')
+                                    .attr('x', centroid[0])
+                                    .attr('y', centroid[1])
+                                    .attr('text-anchor', 'middle')
+                                    .attr('font-size', '8px')
+                                    .attr('fill', '#555')
+                                    .text(cluster.name);
+                            }
+                        } catch (error) {
+                            debugLog(`Error creating cluster ${cluster.name}: ${error.message}`);
+                        }
+                    }
+                });
+                
+                // Draw word points
+                svg.selectAll('.word-point')
+                    .data(currentParticipant.items)
+                    .enter()
+                    .append('circle')
+                    .attr('class', 'word-point')
+                    .attr('cx', (d, i) => reducedVectors[i][0])
+                    .attr('cy', (d, i) => reducedVectors[i][1])
+                    .attr('r', 4)
+                    .attr('fill', (d, i) => {
+                        // Color based on position in sequence
+                        const hue = (i / currentParticipant.items.length) * 360;
+                        return `hsl(${hue}, 70%, 60%)`;
+                    })
+                    .on('mouseover', function(event, d) {
+                        const index = currentParticipant.items.indexOf(d);
+                        showTooltip(event, `${d} (${index + 1})`);
+                    })
+                    .on('mouseout', hideTooltip);
+                
+                // Add word labels
+                svg.selectAll('.word-label')
+                    .data(currentParticipant.items)
+                    .enter()
+                    .append('text')
+                    .attr('class', 'word-label')
+                    .attr('x', (d, i) => reducedVectors[i][0])
+                    .attr('y', (d, i) => reducedVectors[i][1] - 6)
+                    .attr('text-anchor', 'middle')
+                    .text(d => d);
+                
+                // Draw the actual path taken by the participant
+                const pathData = currentParticipant.items.map((item, idx) => {
+                    const position = reducedVectors[idx];
+                    return position;
+                });
+                
+                svg.append('path')
+                    .datum(pathData)
+                    .attr('class', 'actual-path')
+                    .attr('d', d3.line());
+                
+                // Add sequence numbers
+                svg.selectAll('.sequence-number')
+                    .data(currentParticipant.items)
+                    .enter()
+                    .append('circle')
+                    .attr('class', 'sequence-number')
+                    .attr('cx', (d, i) => reducedVectors[i][0])
+                    .attr('cy', (d, i) => reducedVectors[i][1])
+                    .attr('r', 6)
+                    .attr('fill', 'white')
+                    .attr('stroke', '#333')
+                    .attr('stroke-width', 0.5)
+                    .attr('opacity', 0.8)
+                    .attr('transform', (d, i) => {
+                        const x = reducedVectors[i][0];
+                        const y = reducedVectors[i][1];
+                        return `translate(${x + 10}, ${y - 10})`;
+                    });
+                    
+                svg.selectAll('.sequence-text')
+                    .data(currentParticipant.items)
+                    .enter()
+                    .append('text')
+                    .attr('class', 'sequence-text')
+                    .attr('x', (d, i) => reducedVectors[i][0] + 10)
+                    .attr('y', (d, i) => reducedVectors[i][1] - 8)
+                    .attr('text-anchor', 'middle')
+                    .text((d, i) => i + 1);
+                
+                // Add a current position indicator (will be updated during animation)
+                svg.append('circle')
+                    .attr('class', 'current-position')
+                    .attr('cx', reducedVectors[currentStep][0])
+                    .attr('cy', reducedVectors[currentStep][1])
+                    .attr('r', 6)
+                    .attr('fill', currentModelType === 'mvt' ? '#2ecc71' : '#e74c3c');
+                
+                // Generate and draw MVT path prediction
+                const mvtPathPrediction = predictMVTPath();
+                if (mvtPathPrediction && mvtPathPrediction.length > 0) {
+                    const mvtPathData = mvtPathPrediction.map(index => reducedVectors[index]);
+                    
+                    svg.append('path')
+                        .datum(mvtPathData)
+                        .attr('class', 'mvt-path')
+                        .attr('d', d3.line())
+                        .attr('stroke-opacity', currentModelType === 'mvt' ? 0.8 : 0.3);
+                }
+                
+                // Generate and draw Softmax path prediction
+                const softmaxPathPrediction = predictSoftmaxPath();
+                if (softmaxPathPrediction && softmaxPathPrediction.length > 0) {
+                    const softmaxPathData = softmaxPathPrediction.map(index => reducedVectors[index]);
+                    
+                    svg.append('path')
+                        .datum(softmaxPathData)
+                        .attr('class', 'softmax-path')
+                        .attr('d', d3.line())
+                        .attr('stroke-opacity', currentModelType === 'softmax' ? 0.8 : 0.3);
+                }
+                
+                // Add legend
+                const legend = svg.append('g')
+                    .attr('class', 'legend')
+                    .attr('transform', `translate(${width - 120}, 10)`);
+                
+                // Actual path
+                legend.append('line')
+                    .attr('x1', 0)
+                    .attr('y1', 0)
+                    .attr('x2', 15)
+                    .attr('y2', 0)
+                    .attr('stroke', '#3498db')
+                    .attr('stroke-width', 2);
+                    
+                legend.append('text')
+                    .attr('x', 20)
+                    .attr('y', 3)
+                    .attr('font-size', '8px')
+                    .text('Actual Path');
+                
+                // MVT path
+                legend.append('line')
+                    .attr('x1', 0)
+                    .attr('y1', 12)
+                    .attr('x2', 15)
+                    .attr('y2', 12)
+                    .attr('stroke', '#2ecc71')
+                    .attr('stroke-width', 1.5)
+                    .attr('stroke-dasharray', '3, 2');
+                    
+                legend.append('text')
+                    .attr('x', 20)
+                    .attr('y', 15)
+                    .attr('font-size', '8px')
+                    .text('MVT Prediction');
+                
+                // Softmax path
+                legend.append('line')
+                    .attr('x1', 0)
+                    .attr('y1', 24)
+                    .attr('x2', 15)
+                    .attr('y2', 24)
+                    .attr('stroke', '#e74c3c')
+                    .attr('stroke-width', 1.5)
+                    .attr('stroke-dasharray', '2, 1');
+                    
+                legend.append('text')
+                    .attr('x', 20)
+                    .attr('y', 27)
+                    .attr('font-size', '8px')
+                    .text('Softmax Prediction');
+            } catch (error) {
+                handleError("Error creating semantic space map", error);
+                
+                // Provide fallback visualization
+                semanticSpaceView.innerHTML = `
+                    <div style="text-align: center; margin-top: 20px;">
+                        Error creating visualization. Please try refreshing the page.
+                    </div>
+                `;
+            }
+        }
+        
+        // Function to create comparison view
+        function createComparisonView() {
+            try {
+                // Clear previous visualization
+                compareView.innerHTML = '';
+                
+                // Create comparison table
+                const table = document.createElement('table');
+                table.className = 'decision-table';
+                
+                // Create table header
+                const headerRow = document.createElement('tr');
+                
+                const headers = [
+                    'Step', 'Current Word', 'Next Word', 'MVT Prediction', 
+                    'Softmax Prediction', 'Similarity Score', 'Decision'
+                ];
+                
+                headers.forEach(headerText => {
+                    const th = document.createElement('th');
+                    th.textContent = headerText;
+                    headerRow.appendChild(th);
+                });
+                
+                table.appendChild(headerRow);
+                
+                // Create table rows for each transition
+                for (let i = 0; i < currentParticipant.items.length - 1; i++) {
+                    const currentWord = currentParticipant.items[i];
+                    const nextWord = currentParticipant.items[i + 1];
+                    const similarity = currentParticipant.similarities[i];
+                    
+                    const mvtPrediction = getMVTPredictionAt(i);
+                    const softmaxPrediction = getSoftmaxPredictionAt(i);
+                    
+                    const row = document.createElement('tr');
+                    
+                    // Add step number
+                    const stepCell = document.createElement('td');
+                    stepCell.textContent = i + 1;
+                    row.appendChild(stepCell);
+                    
+                    // Add current word
+                    const currentWordCell = document.createElement('td');
+                    currentWordCell.textContent = currentWord;
+                    row.appendChild(currentWordCell);
+                    
+                    // Add next word
+                    const nextWordCell = document.createElement('td');
+                    nextWordCell.textContent = nextWord;
+                    row.appendChild(nextWordCell);
+                    
+                    // Add MVT prediction
+                    const mvtPredictionCell = document.createElement('td');
+                    mvtPredictionCell.textContent = mvtPrediction;
+                    if (mvtPrediction === nextWord) {
+                        mvtPredictionCell.style.backgroundColor = '#D5F5E3';
+                    }
+                    row.appendChild(mvtPredictionCell);
+                    
+                    // Add Softmax prediction
+                    const softmaxPredictionCell = document.createElement('td');
+                    softmaxPredictionCell.textContent = softmaxPrediction;
+                    if (softmaxPrediction === nextWord) {
+                        softmaxPredictionCell.style.backgroundColor = '#FADBD8';
+                    }
+                    row.appendChild(softmaxPredictionCell);
+                    
+                    // Add similarity score
+                    const similarityCell = document.createElement('td');
+                    similarityCell.textContent = similarity.toFixed(2);
+                    row.appendChild(similarityCell);
+                    
+                    // Add decision explanation
+                    const decisionCell = document.createElement('td');
+                    const decision = similarity > mvtThreshold ? 'Exploitation' : 'Exploration';
+                    decisionCell.textContent = decision;
+                    decisionCell.style.backgroundColor = decision === 'Exploitation' ? '#D5F5E3' : '#FADBD8';
+                    row.appendChild(decisionCell);
+                    
+                    table.appendChild(row);
+                }
+                
+                compareView.appendChild(table);
+            } catch (error) {
+                handleError("Error creating comparison view", error);
+                
+                // Provide fallback view
+                compareView.innerHTML = `
+                    <div style="text-align: center; margin-top: 20px;">
+                        Error creating comparison view. Please try refreshing the page.
+                    </div>
+                `;
+            }
+        }
+        
+        // Function to create metrics view
+        function createMetricsView() {
+            try {
+                // Clear previous visualization
+                metricsView.innerHTML = '';
+                
+                // Create tabs for MVT and Softmax metrics
+                const modelTabsDiv = document.createElement('div');
+                modelTabsDiv.className = 'model-tabs';
+                
+                const mvtButton = document.createElement('button');
+                mvtButton.className = 'tab-button active';
+                mvtButton.textContent = 'MVT Metrics';
+                mvtButton.addEventListener('click', () => {
+                    showMetricsFor('mvt');
+                });
+                
+                const softmaxButton = document.createElement('button');
+                softmaxButton.className = 'tab-button';
+                softmaxButton.textContent = 'Softmax Metrics';
+                softmaxButton.addEventListener('click', () => {
+                    showMetricsFor('softmax');
+                });
+                
+                modelTabsDiv.appendChild(mvtButton);
+                modelTabsDiv.appendChild(softmaxButton);
+                metricsView.appendChild(modelTabsDiv);
+                
+                // Create container for metrics
+                const metricsContainer = document.createElement('div');
+                metricsContainer.id = 'detailed-metrics-container';
+                metricsView.appendChild(metricsContainer);
+                
+                // Initialize with MVT metrics
+                showMetricsFor('mvt');
+            } catch (error) {
+                handleError("Error creating metrics view", error);
+                
+                // Provide fallback view
+                metricsView.innerHTML = `
+                    <div style="text-align: center; margin-top: 20px;">
+                        Error creating metrics view. Please try refreshing the page.
+                    </div>
+                `;
+            }
+        }
+        
+        // Function to show metrics for a specific model
+        function showMetricsFor(modelType) {
+            try {
+                const metricsContainer = document.getElementById('detailed-metrics-container');
+                if (!metricsContainer) return;
+                
+                metricsContainer.innerHTML = '';
+                
+                // Update tab buttons
+                const tabButtons = metricsView.querySelectorAll('.model-tabs .tab-button');
+                tabButtons.forEach(button => {
+                    button.classList.remove('active');
+                    if (
+                        (modelType === 'mvt' && button.textContent.includes('MVT')) ||
+                        (modelType === 'softmax' && button.textContent.includes('Softmax'))
+                    ) {
+                        button.classList.add('active');
+                    }
+                });
+                
+                // Create metrics panel
+                const metricsPanel = document.createElement('div');
+                metricsPanel.className = 'metrics-panel';
+                
+                if (modelType === 'mvt') {
+                    // MVT Metrics
+                    const mvtMetrics = calculateMVTMetrics();
+                    
+                    createMetricCard(metricsPanel, 'Average Patch Size', 
+                                    mvtMetrics.avgPatchSize.toFixed(2));
+                    createMetricCard(metricsPanel, 'Number of Patches', 
+                                    mvtMetrics.numPatches.toString());
+                    createMetricCard(metricsPanel, 'Average Within-Patch Similarity', 
+                                    mvtMetrics.avgWithinPatchSimilarity.toFixed(2));
+                    createMetricCard(metricsPanel, 'Average Between-Patch Similarity', 
+                                    mvtMetrics.avgBetweenPatchSimilarity.toFixed(2));
+                    createMetricCard(metricsPanel, 'Exploitation Percentage', 
+                                    `${mvtMetrics.exploitationPercentage.toFixed(1)}%`);
+                    createMetricCard(metricsPanel, 'Exploration Percentage', 
+                                    `${mvtMetrics.explorationPercentage.toFixed(1)}%`);
+                    
+                    // Create chart for patch diminishing returns
+                    const chartContainer = document.createElement('div');
+                    chartContainer.className = 'chart-container';
+                    chartContainer.style.width = '100%';
+                    
+                    // Create chart title
+                    const chartTitle = document.createElement('h3');
+                    chartTitle.textContent = 'Patch Diminishing Returns';
+                    metricsPanel.appendChild(chartTitle);
+                    
+                    // Append chart container
+                    metricsPanel.appendChild(chartContainer);
+                    
+                    // Create the chart
+                    createDiminishingReturnsChart(chartContainer, mvtMetrics.patchData);
+                } else {
+                    // Softmax Metrics
+                    const softmaxMetrics = calculateSoftmaxMetrics();
+                    
+                    createMetricCard(metricsPanel, 'Average Transition Probability', 
+                                    softmaxMetrics.avgTransProb.toFixed(2));
+                    createMetricCard(metricsPanel, 'Average Selectivity', 
+                                    softmaxMetrics.avgSelectivity.toFixed(2));
+                    createMetricCard(metricsPanel, 'Entropy of Choices', 
+                                    softmaxMetrics.entropy.toFixed(2));
+                    createMetricCard(metricsPanel, 'Local vs Global Choices', 
+                                    `${softmaxMetrics.localChoicePercentage.toFixed(1)}% / ${softmaxMetrics.globalChoicePercentage.toFixed(1)}%`);
+                    createMetricCard(metricsPanel, 'Model Accuracy', 
+                                    `${softmaxMetrics.modelAccuracy.toFixed(1)}%`);
+                    createMetricCard(metricsPanel, 'Average Jump Distance', 
+                                    softmaxMetrics.avgJumpDistance.toFixed(2));
+                    
+                    // Create chart for probability distributions
+                    const chartContainer = document.createElement('div');
+                    chartContainer.className = 'chart-container';
+                    chartContainer.style.width = '100%';
+                    
+                    // Create chart title
+                    const chartTitle = document.createElement('h3');
+                    chartTitle.textContent = 'Transition Probability Distribution';
+                    metricsPanel.appendChild(chartTitle);
+                    
+                    // Append chart container
+                    metricsPanel.appendChild(chartContainer);
+                    
+                    // Create the chart
+                    createProbabilityDistChart(chartContainer, softmaxMetrics.transitionProbs);
+                }
+                
+                metricsContainer.appendChild(metricsPanel);
+            } catch (error) {
+                handleError("Error showing metrics", error);
+                
+                // Provide fallback
+                const metricsContainer = document.getElementById('detailed-metrics-container');
+                if (metricsContainer) {
+                    metricsContainer.innerHTML = `
+                        <div style="text-align: center; margin-top: 20px;">
+                            Error displaying metrics. Please try again.
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        // Function to update metrics display panel
+        function updateMetricsDisplay() {
+            try {
+                // Clear current metrics
+                currentMetricsPanel.innerHTML = '';
+                
+                if (currentModelType === 'mvt') {
+                    // Show MVT metrics
+                    const mvtMetrics = calculateMVTMetrics();
+                    
+                    createMetricCard(currentMetricsPanel, 'Patch-Leaving Threshold', 
+                                    mvtThreshold.toFixed(2));
+                    createMetricCard(currentMetricsPanel, 'Patches Identified', 
+                                    mvtMetrics.numPatches.toString());
+                    createMetricCard(currentMetricsPanel, 'Exploitation %', 
+                                    `${mvtMetrics.exploitationPercentage.toFixed(1)}%`);
+                    createMetricCard(currentMetricsPanel, 'Avg. Patch Size', 
+                                    mvtMetrics.avgPatchSize.toFixed(2));
+                    createMetricCard(currentMetricsPanel, 'Current Phase', 
+                                    getCurrentPhase());
+                } else {
+                    // Show Softmax metrics
+                    const softmaxMetrics = calculateSoftmaxMetrics();
+                    
+                    createMetricCard(currentMetricsPanel, 'Temperature', 
+                                    softmaxTemperature.toFixed(2));
+                    createMetricCard(currentMetricsPanel, 'Selectivity', 
+                                    softmaxMetrics.avgSelectivity.toFixed(2));
+                    createMetricCard(currentMetricsPanel, 'Choice Entropy', 
+                                    softmaxMetrics.entropy.toFixed(2));
+                    createMetricCard(currentMetricsPanel, 'Local Choices', 
+                                    `${softmaxMetrics.localChoicePercentage.toFixed(1)}%`);
+                    createMetricCard(currentMetricsPanel, 'Current Move Type', 
+                                    getCurrentMoveType());
+                }
+            } catch (error) {
+                handleError("Error updating metrics display", error);
+            }
+        }
+        
+        // Function to create diminishing returns chart
+        function createDiminishingReturnsChart(container, patchData) {
+            try {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                const margin = { top: 15, right: 20, bottom: 30, left: 40 };
+                
+                // Create SVG element
+                const svg = d3.select(container)
+                    .append('svg')
+                    .attr('width', width)
+                    .attr('height', height);
+                    
+                // Create scales
+                const xScale = d3.scaleLinear()
+                    .domain([0, d3.max(patchData, d => d.itemNumber)])
+                    .range([margin.left, width - margin.right]);
+                    
+                const yScale = d3.scaleLinear()
+                    .domain([0, d3.max(patchData, d => d.cumulativeValue)])
+                    .range([height - margin.bottom, margin.top]);
+                    
+                // Create line generator
+                const line = d3.line()
+                    .x(d => xScale(d.itemNumber))
+                    .y(d => yScale(d.cumulativeValue))
+                    .curve(d3.curveMonotoneX);
+                    
+                // Add line
+                svg.append('path')
+                    .datum(patchData)
+                    .attr('fill', 'none')
+                    .attr('stroke', '#3498db')
+                    .attr('stroke-width', 1.5)
+                    .attr('d', line);
+                    
+                // Add optimal patch-leaving point
+                const optimalPoint = patchData.find(d => d.isOptimal);
+                if (optimalPoint) {
+                    svg.append('circle')
+                        .attr('cx', xScale(optimalPoint.itemNumber))
+                        .attr('cy', yScale(optimalPoint.cumulativeValue))
+                        .attr('r', 4)
+                        .attr('fill', '#e74c3c');
+                        
+                    svg.append('text')
+                        .attr('x', xScale(optimalPoint.itemNumber) + 6)
+                        .attr('y', yScale(optimalPoint.cumulativeValue) - 6)
+                        .attr('font-size', '8px')
+                        .text('Optimal Leaving Point');
+                }
+                
+                // Add axes
+                const xAxis = d3.axisBottom(xScale)
+                    .ticks(5)
+                    .tickFormat(d => d);
+                    
+                const yAxis = d3.axisLeft(yScale)
+                    .ticks(5)
+                    .tickSize(-width + margin.left + margin.right)
+                    .tickFormat(d => d.toFixed(1));
+                    
+                svg.append('g')
+                    .attr('transform', `translate(0, ${height - margin.bottom})`)
+                    .attr('font-size', '8px')
+                    .call(xAxis);
+                    
+                svg.append('g')
+                    .attr('transform', `translate(${margin.left}, 0)`)
+                    .attr('font-size', '8px')
+                    .call(yAxis)
+                    .call(g => g.select(".domain").remove())
+                    .call(g => g.selectAll(".tick line")
+                        .attr("stroke-opacity", 0.1));
+                    
+                // Add axis labels
+                svg.append('text')
+                    .attr('x', width / 2)
+                    .attr('y', height - 5)
+                    .attr('text-anchor', 'middle')
+                    .attr('font-size', '8px')
+                    .text('Items in Patch');
+                    
+                svg.append('text')
+                    .attr('transform', 'rotate(-90)')
+                    .attr('x', -height / 2)
+                    .attr('y', 10)
+                    .attr('text-anchor', 'middle')
+                    .attr('font-size', '8px')
+                    .text('Cumulative Value');
+            } catch (error) {
+                handleError("Error creating diminishing returns chart", error);
+                container.innerHTML = '<div style="text-align: center; padding: 20px;">Error creating chart</div>';
+            }
+        }
+        
+        // Function to create probability distribution chart
+        function createProbabilityDistChart(container, transitionProbs) {
+            try {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                const margin = { top: 15, right: 20, bottom: 30, left: 40 };
+                
+                // Create SVG element
+                const svg = d3.select(container)
+                    .append('svg')
+                    .attr('width', width)
+                    .attr('height', height);
+                    
+                // Sample data for demonstration
+                // In a real implementation, this would use the actual transition probabilities
+                const data = [];
+                for (let i = 0; i < 10; i++) {
+                    data.push({
+                        distance: i,
+                        probability: Math.exp(-i * softmaxTemperature) / (1 + i * softmaxDecay)
+                    });
+                }
+                
+                // Normalize probabilities
+                const sum = data.reduce((acc, d) => acc + d.probability, 0);
+                data.forEach(d => d.probability = d.probability / sum);
+                
+                // Create scales
+                const xScale = d3.scaleBand()
+                    .domain(data.map(d => d.distance))
+                    .range([margin.left, width - margin.right])
+                    .padding(0.1);
+                    
+                const yScale = d3.scaleLinear()
+                    .domain([0, d3.max(data, d => d.probability)])
+                    .range([height - margin.bottom, margin.top]);
+                    
+                // Create bars
+                svg.selectAll('.bar')
+                    .data(data)
+                    .enter()
+                    .append('rect')
+                    .attr('class', 'bar')
+                    .attr('x', d => xScale(d.distance))
+                    .attr('y', d => yScale(d.probability))
+                    .attr('width', xScale.bandwidth())
+                    .attr('height', d => height - margin.bottom - yScale(d.probability))
+                    .attr('fill', '#9b59b6');
+                    
+                // Add axes
+                const xAxis = d3.axisBottom(xScale)
+                    .tickFormat(d => d);
+                    
+                const yAxis = d3.axisLeft(yScale)
+                    .ticks(5)
+                    .tickSize(-width + margin.left + margin.right)
+                    .tickFormat(d => d.toFixed(2));
+                    
+                svg.append('g')
+                    .attr('transform', `translate(0, ${height - margin.bottom})`)
+                    .attr('font-size', '8px')
+                    .call(xAxis);
+                    
+                svg.append('g')
+                    .attr('transform', `translate(${margin.left}, 0)`)
+                    .attr('font-size', '8px')
+                    .call(yAxis)
+                    .call(g => g.select(".domain").remove())
+                    .call(g => g.selectAll(".tick line")
+                        .attr("stroke-opacity", 0.1));
+                    
+                // Add axis labels
+                svg.append('text')
+                    .attr('x', width / 2)
+                    .attr('y', height - 5)
+                    .attr('text-anchor', 'middle')
+                    .attr('font-size', '8px')
+                    .text('Semantic Distance');
+                    
+                svg.append('text')
+                    .attr('transform', 'rotate(-90)')
+                    .attr('x', -height / 2)
+                    .attr('y', 10)
+                    .attr('text-anchor', 'middle')
+                    .attr('font-size', '8px')
+                    .text('Selection Probability');
+            } catch (error) {
+                handleError("Error creating probability distribution chart", error);
+                container.innerHTML = '<div style="text-align: center; padding: 20px;">Error creating chart</div>';
+            }
+        }
+        
+        // Helper functions
+        
+        // Function to predict path using MVT model
+        function predictMVTPath() {
+            try {
+                // This is a simplified implementation for demonstration
+                // In a real scenario, this would implement the full MVT algorithm
+                
+                const items = currentParticipant.items;
+                const similarities = currentParticipant.similarities;
+                
+                // Initialize path with first item
+                const path = [0];
+                let currentItemIndex = 0;
+                let patchItems = [0];
+                
+                // Continue until we've created a path of the same length as the original
+                while (path.length < items.length) {
+                    // Find next item based on MVT logic
+                    
+                    // If we're at the last word in current patch, move to a new patch
+                    if (currentItemIndex < similarities.length && similarities[currentItemIndex] < mvtThreshold) {
+                        // End of patch, find a new patch
+                        const availableIndices = [];
+                        for (let i = 0; i < items.length; i++) {
+                            if (!path.includes(i)) {
+                                availableIndices.push(i);
+                            }
+                        }
+                        
+                        if (availableIndices.length > 0) {
+                            // Pick random index from available
+                            const nextIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+                            path.push(nextIndex);
+                            currentItemIndex = nextIndex;
+                            patchItems = [nextIndex];
+                        } else {
+                            // No more items available
+                            break;
+                        }
+                    } else {
+                        // Find next item in current patch
+                        const mostSimilarIndex = findMostSimilarUnusedItem(currentItemIndex, path);
+                        if (mostSimilarIndex !== -1) {
+                            path.push(mostSimilarIndex);
+                            currentItemIndex = mostSimilarIndex;
+                            patchItems.push(mostSimilarIndex);
+                        } else {
+                            // No similar items available, move to a new patch
+                            const availableIndices = [];
+                            for (let i = 0; i < items.length; i++) {
+                                if (!path.includes(i)) {
+                                    availableIndices.push(i);
+                                }
+                            }
+                            
+                            if (availableIndices.length > 0) {
+                                const nextIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+                                path.push(nextIndex);
+                                currentItemIndex = nextIndex;
+                                patchItems = [nextIndex];
+                            } else {
+                                // No more items available
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                return path;
+            } catch (error) {
+                handleError("Error predicting MVT path", error);
+                return [];
+            }
+        }
+        
+        // Function to predict path using Softmax model
+        function predictSoftmaxPath() {
+            try {
+                // This is a simplified implementation for demonstration
+                // In a real scenario, this would implement the full Softmax model
+                
+                const items = currentParticipant.items;
+                const vectors = currentParticipant.vectors;
+                
+                // Initialize path with first item
+                const path = [0];
+                let currentItemIndex = 0;
+                
+                // Continue until we've created a path of the same length as the original
+                while (path.length < items.length) {
+                    // Calculate similarities to all other items
+                    const similarities = [];
+                    for (let i = 0; i < items.length; i++) {
+                        if (!path.includes(i)) {
+                            const similarity = calculateCosineSimilarity(
+                                vectors[currentItemIndex], vectors[i]
+                            );
+                            similarities.push({ index: i, similarity });
+                        }
+                    }
+                    
+                    if (similarities.length === 0) {
+                        // No more items available
+                        break;
+                    }
+                    
+                    // Apply softmax to convert similarities to probabilities
+                    const probabilities = applyingSoftmax(
+                        similarities.map(s => s.similarity), 
+                        softmaxTemperature
+                    );
+                    
+                    // Select next item based on probabilities
+                    const randomValue = Math.random();
+                    let cumulativeProbability = 0;
+                    let nextIndex = similarities[0].index;
+                    
+                    for (let i = 0; i < probabilities.length; i++) {
+                        cumulativeProbability += probabilities[i];
+                        if (randomValue < cumulativeProbability) {
+                            nextIndex = similarities[i].index;
+                            break;
+                        }
+                    }
+                    
+                    path.push(nextIndex);
+                    currentItemIndex = nextIndex;
+                }
+                
+                return path;
+            } catch (error) {
+                handleError("Error predicting Softmax path", error);
+                return [];
+            }
+        }
+        
+        // Function to find most similar unused item
+        function findMostSimilarUnusedItem(currentIndex, usedIndices) {
+            try {
+                const vectors = currentParticipant.vectors;
+                let maxSimilarity = -1;
+                let maxIndex = -1;
+                
+                for (let i = 0; i < vectors.length; i++) {
+                    if (!usedIndices.includes(i)) {
+                        const similarity = calculateCosineSimilarity(
+                            vectors[currentIndex], vectors[i]
+                        );
+                        
+                        if (similarity > maxSimilarity && similarity >= mvtThreshold) {
+                            maxSimilarity = similarity;
+                            maxIndex = i;
+                        }
+                    }
+                }
+                
+                return maxIndex;
+            } catch (error) {
+                handleError("Error finding most similar unused item", error);
+                return -1;
+            }
+        }
+        
+        // Function to calculate cosine similarity
+        function calculateCosineSimilarity(v1, v2) {
+            try {
+                // Simple implementation of cosine similarity
+                let dotProduct = 0;
+                let v1Magnitude = 0;
+                let v2Magnitude = 0;
+                
+                for (let i = 0; i < v1.length; i++) {
+                    dotProduct += v1[i] * v2[i];
+                    v1Magnitude += v1[i] * v1[i];
+                    v2Magnitude += v2[i] * v2[i];
+                }
+                
+                v1Magnitude = Math.sqrt(v1Magnitude);
+                v2Magnitude = Math.sqrt(v2Magnitude);
+                
+                if (v1Magnitude === 0 || v2Magnitude === 0) {
+                    return 0;
+                }
+                
+                return dotProduct / (v1Magnitude * v2Magnitude);
+            } catch (error) {
+                handleError("Error calculating cosine similarity", error);
+                return 0;
+            }
+        }
+        
+        // Function to apply softmax
+        function applyingSoftmax(values, temperature) {
+            try {
+                // Scale values by temperature
+                const scaledValues = values.map(v => v / temperature);
+                
+                // Find max value for numerical stability
+                const maxValue = Math.max(...scaledValues);
+                
+                // Calculate exp of shifted values
+                const expValues = scaledValues.map(v => Math.exp(v - maxValue));
+                
+                // Calculate sum of exp values
+                const sumExp = expValues.reduce((acc, val) => acc + val, 0);
+                
+                // Calculate softmax probabilities
+                return expValues.map(v => v / sumExp);
+            } catch (error) {
+                handleError("Error applying softmax", error);
+                return values.map(() => 1 / values.length); // Uniform distribution fallback
+            }
+        }
+        
+        // Function to calculate MVT metrics
+        function calculateMVTMetrics() {
+            try {
+                const items = currentParticipant.items;
+                const similarities = currentParticipant.similarities;
+                
+                // Identify patches based on threshold
+                const patches = [];
+                let currentPatch = [0];
+                
+                for (let i = 0; i < similarities.length; i++) {
+                    if (similarities[i] < mvtThreshold) {
+                        // End of patch
+                        patches.push(currentPatch);
+                        currentPatch = [i + 1];
+                    } else {
+                        // Continue current patch
+                        currentPatch.push(i + 1);
+                    }
+                }
+                
+                // Add the last patch
+                if (currentPatch.length > 0) {
+                    patches.push(currentPatch);
+                }
+                
+                // Calculate within-patch similarities
+                let totalWithinPatchSimilarity = 0;
+                let withinPatchCount = 0;
+                
+                for (const patch of patches) {
+                    for (let i = 0; i < patch.length - 1; i++) {
+                        const idx = patch[i];
+                        if (idx < similarities.length) {
+                            totalWithinPatchSimilarity += similarities[idx];
+                            withinPatchCount++;
+                        }
+                    }
+                }
+                
+                const avgWithinPatchSimilarity = withinPatchCount > 0 ? 
+                    totalWithinPatchSimilarity / withinPatchCount : 0;
+                
+                // Calculate between-patch similarities
+                let totalBetweenPatchSimilarity = 0;
+                let betweenPatchCount = 0;
+                
+                for (let i = 0; i < patches.length - 1; i++) {
+                    const lastItemInPatch = patches[i][patches[i].length - 1];
+                    
+                    if (lastItemInPatch - 1 < similarities.length) {
+                        // The similarity between the last item of one patch and first item of next
+                        const betweenSimilarity = similarities[lastItemInPatch - 1];
+                        totalBetweenPatchSimilarity += betweenSimilarity;
+                        betweenPatchCount++;
+                    }
+                }
+                
+                const avgBetweenPatchSimilarity = betweenPatchCount > 0 ?
+                    totalBetweenPatchSimilarity / betweenPatchCount : 0;
+                
+                // Calculate exploitation vs exploration percentages
+                const exploitationItems = patches.reduce((count, patch) => count + patch.length, 0);
+                const totalItems = items.length;
+                
+                const exploitationPercentage = (exploitationItems / totalItems) * 100;
+                const explorationPercentage = 100 - exploitationPercentage;
+                
+                // Calculate patch sizes
+                const patchSizes = patches.map(patch => patch.length);
+                const avgPatchSize = patchSizes.length > 0 ? 
+                    patchSizes.reduce((sum, size) => sum + size, 0) / patchSizes.length : 0;
+                
+                // Create diminishing returns data
+                const patchData = [];
+                let cumulativeValue = 0;
+                
+                // Use first patch for demonstration
+                if (patches.length > 0) {
+                    const patch = patches[0];
+                    for (let i = 0; i < patch.length; i++) {
+                        // Calculate simulated value (decreasing with each item)
+                        const value = i === 0 ? 1 : (i - 1 < similarities.length ? 
+                            similarities[patch[i - 1] - 1] * (1 - i * 0.1) : 0.5);
+                        cumulativeValue += value;
+                        
+                        patchData.push({
+                            itemNumber: i + 1,
+                            value,
+                            cumulativeValue,
+                            isOptimal: i === Math.floor(patch.length / 2) // For demonstration
+                        });
+                    }
+                }
+                
+                return {
+                    numPatches: patches.length,
+                    avgPatchSize,
+                    avgWithinPatchSimilarity,
+                    avgBetweenPatchSimilarity,
+                    exploitationPercentage,
+                    explorationPercentage,
+                    patchData,
+                    patches
+                };
+            } catch (error) {
+                handleError("Error calculating MVT metrics", error);
+                // Return fallback metrics
+                return {
+                    numPatches: 0,
+                    avgPatchSize: 0,
+                    avgWithinPatchSimilarity: 0,
+                    avgBetweenPatchSimilarity: 0,
+                    exploitationPercentage: 0,
+                    explorationPercentage: 0,
+                    patchData: [],
+                    patches: []
+                };
+            }
+        }
+        
+        // Function to calculate Softmax metrics
+        function calculateSoftmaxMetrics() {
+            try {
+                const items = currentParticipant.items;
+                const vectors = currentParticipant.vectors;
+                
+                // Calculate transition probabilities
+                const transitionProbs = [];
+                
+                for (let i = 0; i < items.length - 1; i++) {
+                    const currentVector = vectors[i];
+                    
+                    // Calculate similarities to all other items
+                    const similarities = [];
+                    for (let j = 0; j < items.length; j++) {
+                        if (j !== i) {
+                            const similarity = calculateCosineSimilarity(
+                                currentVector, vectors[j]
+                            );
+                            similarities.push({ index: j, similarity });
+                        }
+                    }
+                    
+                    // Apply softmax to convert similarities to probabilities
+                    const probs = applyingSoftmax(
+                        similarities.map(s => s.similarity),
+                        softmaxTemperature
+                    );
+                    
+                    // Add to transition probabilities
+                    for (let j = 0; j < similarities.length; j++) {
+                        transitionProbs.push({
+                            from: i,
+                            to: similarities[j].index,
+                            probability: probs[j]
+                        });
+                    }
+                }
+                
+                // Calculate average transition probability
+                let totalProb = 0;
+                let count = 0;
+                
+                for (let i = 0; i < items.length - 1; i++) {
+                    const actualNext = i + 1;
+                    const matchingTransition = transitionProbs.find(
+                        t => t.from === i && t.to === actualNext
+                    );
+                    
+                    if (matchingTransition) {
+                        totalProb += matchingTransition.probability;
+                        count++;
+                    }
+                }
+                
+                const avgTransProb = count > 0 ? totalProb / count : 0;
+                
+                // Calculate selectivity (how focused or spread out the probabilities are)
+                const avgSelectivity = transitionProbs.length > 0 ?
+                    transitionProbs.reduce((sum, t) => sum + Math.pow(t.probability, 2), 0) / transitionProbs.length : 0;
+                
+                // Calculate entropy of transitions
+                const entropy = transitionProbs.length > 0 ?
+                    -transitionProbs.reduce((sum, t) => sum + (t.probability * Math.log2(t.probability + 1e-10)), 0) / items.length : 0;
+                
+                // Calculate local vs global choice percentages
+                let localChoices = 0;
+                let globalChoices = 0;
+                
+                for (let i = 0; i < items.length - 1; i++) {
+                    const similarity = i < currentParticipant.similarities.length ? 
+                        currentParticipant.similarities[i] : 0;
+                    
+                    if (similarity > 0.6) {  // Threshold for local choice
+                        localChoices++;
+                    } else {
+                        globalChoices++;
+                    }
+                }
+                
+                const totalChoices = localChoices + globalChoices;
+                const localChoicePercentage = totalChoices > 0 ? 
+                    (localChoices / totalChoices) * 100 : 0;
+                const globalChoicePercentage = 100 - localChoicePercentage;
+                
+                // Calculate model accuracy (how often softmax would predict the actual next word)
+                let correctPredictions = 0;
+                
+                for (let i = 0; i < items.length - 1; i++) {
+                    const predictedNext = getSoftmaxPredictionAt(i);
+                    const actualNext = items[i + 1];
+                    
+                    if (predictedNext === actualNext) {
+                        correctPredictions++;
+                    }
+                }
+                
+                const modelAccuracy = items.length > 1 ?
+                    (correctPredictions / (items.length - 1)) * 100 : 0;
+                
+                // Calculate average jump distance in semantic space
+                let totalJumpDistance = 0;
+                
+                for (let i = 0; i < items.length - 1; i++) {
+                    const similarity = i < currentParticipant.similarities.length ? 
+                        currentParticipant.similarities[i] : 0;
+                    const distance = 1 - similarity;
+                    totalJumpDistance += distance;
+                }
+                
+                const avgJumpDistance = items.length > 1 ?
+                    totalJumpDistance / (items.length - 1) : 0;
+                
+                return {
+                    avgTransProb,
+                    avgSelectivity,
+                    entropy,
+                    localChoicePercentage,
+                    globalChoicePercentage,
+                    modelAccuracy,
+                    avgJumpDistance,
+                    transitionProbs
+                };
+            } catch (error) {
+                handleError("Error calculating Softmax metrics", error);
+                // Return fallback metrics
+                return {
+                    avgTransProb: 0,
+                    avgSelectivity: 0,
+                    entropy: 0,
+                    localChoicePercentage: 0,
+                    globalChoicePercentage: 0, 
+                    modelAccuracy: 0,
+                    avgJumpDistance: 0,
+                    transitionProbs: []
+                };
+            }
+        }
+        
+        // Function to get MVT prediction at a specific step
+        function getMVTPredictionAt(step) {
+            try {
+                const items = currentParticipant.items;
+                const similarities = currentParticipant.similarities;
+                
+                if (step >= similarities.length) {
+                    return "N/A";
+                }
+                
+                if (similarities[step] >= mvtThreshold) {
+                    // Stay in current patch, find next most similar
+                    // For simplicity, we'll just return the actual next
+                    return items[step + 1];
+                } else {
+                    // Move to new patch
+                    // For simplicity, find a word with low similarity
+                    for (let i = 0; i < items.length; i++) {
+                        if (i !== step && i !== step + 1) {
+                            const similarity = calculateCosineSimilarity(
+                                currentParticipant.vectors[step], 
+                                currentParticipant.vectors[i]
+                            );
+                            
+                            if (similarity < mvtThreshold) {
+                                return items[i];
+                            }
+                        }
+                    }
+                    
+                    return items[step + 1]; // Fallback
+                }
+            } catch (error) {
+                handleError("Error getting MVT prediction", error);
+                return "Error";
+            }
+        }
+        
+        // Function to get Softmax prediction at a specific step
+        function getSoftmaxPredictionAt(step) {
+            try {
+                const items = currentParticipant.items;
+                const vectors = currentParticipant.vectors;
+                
+                if (step >= items.length - 1) {
+                    return "N/A";
+                }
+                
+                // Calculate similarities to all other items
+                const similarities = [];
+                for (let i = 0; i < items.length; i++) {
+                    if (i !== step) {
+                        const similarity = calculateCosineSimilarity(
+                            vectors[step], vectors[i]
+                        );
+                        similarities.push({ index: i, similarity });
+                    }
+                }
+                
+                // Apply softmax to convert similarities to probabilities
+                const probs = applyingSoftmax(
+                    similarities.map(s => s.similarity),
+                    softmaxTemperature
+                );
+                
+                // Find item with highest probability
+                let maxProbIndex = 0;
+                for (let i = 1; i < probs.length; i++) {
+                    if (probs[i] > probs[maxProbIndex]) {
+                        maxProbIndex = i;
+                    }
+                }
+                
+                return items[similarities[maxProbIndex].index];
+            } catch (error) {
+                handleError("Error getting Softmax prediction", error);
+                return "Error";
+            }
+        }
+        
+        // Function to get current phase
+        function getCurrentPhase() {
+            try {
+                if (currentStep >= currentParticipant.similarities.length) {
+                    return "N/A";
+                }
+                
+                const mvtMetrics = calculateMVTMetrics();
+                
+                // Find which patch contains the current step
+                for (let i = 0; i < mvtMetrics.patches.length; i++) {
+                    if (mvtMetrics.patches[i].includes(currentStep)) {
+                        return `Patch ${i + 1}`;
+                    }
+                }
+                
+                return "Unknown";
+            } catch (error) {
+                handleError("Error getting current phase", error);
+                return "Unknown";
+            }
+        }
+        
+        // Function to get current move type
+        function getCurrentMoveType() {
+            try {
+                if (currentStep >= currentParticipant.similarities.length) {
+                    return "N/A";
+                }
+                
+                const similarity = currentParticipant.similarities[currentStep];
+                
+                if (similarity > 0.6) {
+                    return "Local";
+                } else if (similarity > 0.3) {
+                    return "Medium";
+                } else {
+                    return "Global";
+                }
+            } catch (error) {
+                handleError("Error getting current move type", error);
+                return "Unknown";
+            }
+        }
+        
+        // Helper
