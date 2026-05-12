@@ -2,52 +2,6 @@
 # -*- coding: utf-8 -*-
 
 """
-Author    : Younes Valibeigi  
-Date      : Thu Jan 23, 2025
-Description:    Supervised and unsupervised techniques to decode signals from a 
-                population of neurons: the case of head-direction cells (Python version). 
-Contact   : younes.valibeigi@mcgill.ca  
-"""
-
-"""
-TA-Important Note:  
-    
-I have made every effort to convert the MATLAB assignment into Python as accurately  
-as possible. However, there may be some details from the original assignment that  
-I might have missed.  
-
-Please refer to the MATLAB version of each question to ensure nothing is overlooked.  
-It is your responsibility to verify that all questions are addressed thoroughly.  
-
-I tried to make the code as error-free as possible, but there might still be 
-errors in the Python version of the code or in the functions. Please let me 
-know about any errors via email, and I will work on fixing them and upload the 
-corrected version.
-
-"""
-
-
-
-# %% Supervised and unsupervised techniques to decode signals from a
-# population of neurons: the case of head-direction cells.
-# NEUR-503, McGill
-#
-# The assignment consists of answering the "QUESTIONS" below (all caps
-# to make sure you don't miss them).
-# Don't get stuck on one question if you don't know how to do it!
-#
-# This tutorial will guide you through the analysis of HD cell population data
-# and how to extract head-direction and simple topological features from
-# the population activity. It starts with PCA and then demonstrates how to use
-# IsoMap to extract the topology without the inherent constraints of PCA.
-
-# Copyright (C) 2021 Adrien Peyrache
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-
 # %% Import necessary libraries
 import scipy.io as sio  # For loading .mat files
 import numpy as np  # For numerical operations
